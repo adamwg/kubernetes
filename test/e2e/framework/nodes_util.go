@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 )
@@ -48,8 +48,11 @@ func IngressUpgrade(isUpgrade bool) error {
 	}
 }
 
+// MasterUpgrade upgrades the master node(s).
 func MasterUpgrade(v string) error {
 	switch TestContext.Provider {
+	case "local":
+		return masterUpgradeLocal(v)
 	case "gce":
 		return masterUpgradeGCE(v, false)
 	case "gke":
@@ -59,6 +62,16 @@ func MasterUpgrade(v string) error {
 	default:
 		return fmt.Errorf("MasterUpgrade() is not implemented for provider %s", TestContext.Provider)
 	}
+}
+
+func masterUpgradeLocal(v string) error {
+	script := localUpgradeScript()
+	if script == "" {
+		return fmt.Errorf("local upgrade script not provided")
+	}
+
+	_, _, err := RunCmdEnv(os.Environ(), script, "master", v)
+	return err
 }
 
 func etcdUpgradeGCE(target_storage, target_version string) error {
@@ -194,10 +207,13 @@ func masterUpgradeKubernetesAnywhere(v string) error {
 	return nil
 }
 
+// NodeUpgrade upgrades nodes.
 func NodeUpgrade(f *Framework, v string, img string) error {
 	// Perform the upgrade.
 	var err error
 	switch TestContext.Provider {
+	case "local":
+		err = nodeUpgradeLocal(v)
 	case "gce":
 		err = nodeUpgradeGCE(v, img, false)
 	case "gke":
@@ -211,6 +227,17 @@ func NodeUpgrade(f *Framework, v string, img string) error {
 	return waitForNodesReadyAfterUpgrade(f)
 }
 
+func nodeUpgradeLocal(v string) error {
+	script := localUpgradeScript()
+	if script == "" {
+		return fmt.Errorf("local upgrade script not provided")
+	}
+
+	_, _, err := RunCmdEnv(os.Environ(), script, "node", v)
+	return err
+}
+
+// NodeUpgradeGCEWithKubeProxyDaemonSet upgrades nodes on GCE with enabling/disabling the daemon set of kube-proxy.
 // TODO(mrhohn): Remove this function when kube-proxy is run as a DaemonSet by default.
 func NodeUpgradeGCEWithKubeProxyDaemonSet(f *Framework, v string, img string, enableKubeProxyDaemonSet bool) error {
 	// Perform the upgrade.
@@ -317,6 +344,10 @@ func gceUpgradeScript() string {
 		return path.Join(TestContext.RepoRoot, "cluster/gce/upgrade.sh")
 	}
 	return TestContext.GCEUpgradeScript
+}
+
+func localUpgradeScript() string {
+	return TestContext.LocalUpgradeScript
 }
 
 func waitForSSHTunnels() {
