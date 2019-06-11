@@ -73,8 +73,6 @@ func (IngressUpgradeTest) Name() string { return "ingress-upgrade" }
 // Also keeps track of all load balancer resources for cross-checking
 // during an IngressUpgrade.
 func (t *IngressUpgradeTest) Setup(f *framework.Framework) {
-	framework.SkipUnlessProviderIs("gce", "gke")
-
 	// jig handles all Kubernetes testing logic
 	jig := ingress.NewIngressTestJig(f.ClientSet)
 
@@ -152,6 +150,10 @@ func (t *IngressUpgradeTest) Teardown(f *framework.Framework) {
 
 // Skip checks if the test or part of the test should be skipped.
 func (t *IngressUpgradeTest) Skip(upgCtx UpgradeContext) bool {
+	if !framework.ProviderIs("gce", "gke") {
+		return true
+	}
+
 	sslNameChangeVersion, err := version.ParseGeneric("v1.10.0")
 	framework.ExpectNoError(err)
 	var hasVersionBelow, hasVersionAboveOrEqual bool
